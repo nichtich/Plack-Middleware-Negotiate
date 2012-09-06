@@ -1,45 +1,52 @@
 package Plack::Middleware::Negotiate;
-#ABSTRACT: Apply HTTP content negotiation as PSGI Middleware
+#ABSTRACT: Apply HTTP content negotiation as Plack middleware
 use strict;
 use warnings;
 use v5.10.1;
-
 use parent 'Plack::Middleware';
 
 use Plack::Util::Accessor qw(formats parameter extension);
 use Plack::Request;
 use HTTP::Negotiate qw(choose);
+use Carp qw(croak);
 
-#use Log::Contextual::WarnLogger;
-#use Log::Contextual qw(:log), -default_logger 
-#    => Log::Contextual::WarnLogger->new({ env_prefix => 'PLACK_APP_NEGOTIATE' });
+use Log::Contextual::WarnLogger;
+use Log::Contextual qw(:log), 
+	-default_logger => Log::Contextual::WarnLogger->new({ 
+		env_prefix => 'PLACK_MIDDLEWARE_NEGOTIATE' });
 
 sub prepare_app {
     my $self = shift;
 
-    $self->{formats} //= { }; 
+	croak __PACKAGE__ . ' requires formats'
+		unless $self->{formats} and %{$self->{formats}};
+
     $self->{formats}->{_} //= { };
 
-	# TODO: validate formats
+	unless ($self->{formats}->{_}->{type}) {
+		foreach (grep { $_ ne '_' } keys %{$self->{formats}}) {
+			croak __PACKAGE__ . " format requires type: $_"
+				unless $self->{formats}->{$_}->{type};
+		}
+	}
 }
 
 sub call {
     my ($self, $env) = @_;
 
+	my $orig_path = $env->{PATH_INFO};
+
     $env->{'negotiate.format'} = $self->negotiate($env);
 
-    my $res = $self->app->($env);
-
-    Plack::Util::response_cb($res, sub {
+    Plack::Util::response_cb( $self->app->($env), sub {
         my $res = shift;
-
-		$self->set_headers( $res->[1], $env->{'negotiate.format'} );
-
+		$self->add_headers( $res->[1], $env->{'negotiate.format'} );
+		$env->{PATH_INFO} = $orig_path;
         $res;
     });
 }
 
-sub set_headers {
+sub add_headers {
 	my ($self, $headers, $name) = @_;
 
     my $format = $self->about($name) || return;
@@ -54,34 +61,32 @@ sub set_headers {
 
 	push @$headers, 'Content-Language' => $format->{language}
 		if $format->{language} and !$fields->{'Content-Language'};
-
-	# TODO: Content-Encoding (?)
 }
 
 sub negotiate {
     my ($self, $env) = @_;
     my $req = Plack::Request->new($env);
 
-    return unless %{$self->{formats}};
-
     if (defined $self->parameter) {
         my $format = $req->param($self->parameter);
-        return $format if defined $format
-			and $format ne '_' and $self->{formats}->{$format};
+        if ( ($format // '_') ne '_' and $self->{formats}->{$format}) {
+			log_trace { "format $format chosen based on query parameter" };
+			return $format;
+		}
     }
 
     if ($self->extension and $req->path =~ /\.([^.]+)$/ 
             and $self->formats->{$1}) {
         my $format = $1;
-        if ($self->extension eq 'strip') {
-            $env->{PATH_INFO}   =~ s/\.$format$//;
-			no warnings; # $2 undefined
-			$env->{REQUEST_URI} =~ s/^([^?]*)\.$format(\?.+)?$/$1$2/;
-        }
+        $env->{PATH_INFO} =~ s/\.$format$//
+			if $self->extension eq 'strip';
+		log_trace { "format $format chosen based on extension" };
         return $format;
     }
 
-    return choose($self->variants, $req->headers);
+    my $format = choose($self->variants, $req->headers);
+	log_trace { "format $format chosen based on HTTP content negotiation" };
+	return $format;
 }
 
 sub about {
@@ -121,6 +126,8 @@ sub variants {
 
 1;
 
+=encoding utf8
+
 =head1 SYNOPSIS
 
     builder {
@@ -140,16 +147,32 @@ sub variants {
 
 =head1 DESCRIPTION
 
-Plack::Middleware::Negotiate applies HTTP content negotiation, and sets the
-L<PSGI> environment key C<negotiate.format> to the negotiated format name. It
-further adds HTTP headers Content-Type and Content-Language unless they already
-exist in the PSGI response. In addition to normal content negotiation one may
-enable explicit format selection with a path extension or query parameter.
+Plack::Middleware::Negotiate applies HTTP content negotiation to a L<PSGI>
+request. The PSGI environment key C<negotiate.format> is set to the chosen
+format name. In addition to normal content negotiation one may enable explicit
+format selection with a path extension or query parameter. The middleware takes
+care for rewriting and restoring PATH_INFO if it is configured to detect and
+strip a format extension. The PSGI response is enriched with corresponding HTTP
+headers Content-Type and Content-Language unless these headers already exist.
+
+=method new ( formats => { ... } [ %argument ] )
+
+Creates a new negotiation middleware with a given set of formats. The argument
+C<parameter> can be added to support explicit format selection with a query
+parameter. The argument C<extension> can be used to support explicit format
+selection with a virtual file extension. Use C<< format => 'strip' >> to strip
+a known format name from the request path and C<< format => 'keep' >> to keep
+it. Each format can be defined with C<type>, C<quality> (defaults to 1),
+C<encoding>, C<charset>, and C<language>. The special format name C<_>
+(underscore) is reserved to define default values for all formats.
 
 =method negotiate ( $env )
 
-Returns the negotiated format name for a given PSGI request. May return undef
-if no format was found. May modify the request if extension is set to C<strip>.
+Chooses a format based on a PSGI request. The request is first checked for
+explicit format selection via C<parameter> and C<extionsion> (if configured)
+and then passed to L<HTTP::Negotiate>. Returns the format name. May modify the
+PSGI request environment keys PATH_INFO and SCRIPT_NAME if format was selected
+by extension set to C<strip>.
 
 =method about ( $format )
 
@@ -168,5 +191,18 @@ size is always zero.
 
 Add apropriate HTTP response headers for a format unless the headers are
 already given.
+
+=head1 LOGGING AND DEBUGGUNG
+
+Plack::Middleware::Negotiate uses C<Log::Contextual> to emit a logging message
+during content negotiation on logging level <trace>. Just set:
+
+    $ENV{PLACK_MIDDLEWARE_NEGOTIATE_TRACE} = 1;
+
+=head1 LIMITATIONS
+
+The Content-Encoding HTTP response header is not automatically set on a
+response and content negotiation based on size is not supported. Feel free to
+comment on whether and how this middleware should support both.
 
 =cut

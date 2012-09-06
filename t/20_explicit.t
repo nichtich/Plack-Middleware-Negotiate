@@ -6,38 +6,53 @@ use Plack::Builder;
 use Plack::Test;
 use HTTP::Request::Common;
 
-my $app = sub {
-	my $env = shift;
-	[200,[],[ 
-		join '|', 
-			$env->{'negotiate.format'},
-			$env->{PATH_INFO},
-			$env->{REQUEST_URI} 
-	]]; 
+my $app = sub { 
+    my $env = shift;
+    [200,[],[ join '|', map { $env->{$_} } 
+        qw(negotiate.format SCRIPT_NAME PATH_INFO)]];
 };
 
-my $stack = builder {
-	enable 'Negotiate',
-		formats => {
-			xml  => { type => 'application/xml' },
-			html => { type => 'text/html' },
-		},
-		parameter => 'format',
-		extension => 'strip';
-	$app;
+
+my $stack = builder { 
+	mount '/a', builder {
+		enable sub {
+			my $app = shift;
+			sub {
+				my $env = shift;
+				Plack::Util::response_cb( $app->($env), sub {
+					my $res = shift;
+					push @{$res->[1]}, 'x-path' => $env->{PATH_INFO};
+					$res;
+				});
+			};
+		};
+		enable 'Negotiate',
+			formats => {
+				xml  => { type => 'application/xml' },
+				html => { type => 'text/html' },
+			},
+			parameter => 'format',
+			extension => 'strip';
+		$app;
+	};
 };
 
 test_psgi $stack => sub {
-	my $cb = shift;
+    my $cb = shift;
 
-	my $res = $cb->(GET '/foo.xml');
-	is $res->content, 'xml|/foo|/foo', 'stripped extension';
+    my $res = $cb->(GET '/a/foo.xml');
+    is $res->content, 'xml|/a|/foo', 'stripped extension';
+	is $res->header('x-path'),'/foo.xml', 'restored path';
 
-	$res = $cb->(GET '/foo.xml?format=html');
-	is $res->content, 'html|/foo.xml|/foo.xml?format=html', 'parameter';
+    $res = $cb->(GET '/a/foo.xml?format=html');
+    is $res->content, 'html|/a|/foo.xml', 'parameter';
 
-	$res = $cb->(GET '/foo.xml?format=baz');
-	is $res->content, 'xml|/foo|/foo?format=baz', 'stripped extension, kept query';
+    $res = $cb->(GET '/a/foo.xml?format=baz');
+    is $res->content, 'xml|/a|/foo', 'skip unknown parameter';
+	is $res->header('x-path'),'/foo.xml', 'restored path';
+
+    $res = $cb->(GET '/a?format=xml');
+    is $res->content, 'xml|/a|', 'parameter on empty script';
 };
 
 done_testing;
