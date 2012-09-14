@@ -6,7 +6,7 @@ use Plack::Builder;
 use Plack::Test;
 use HTTP::Request::Common;
 
-my $app = sub { [200,[],[ shift->{'negotiate.format'} // '' ]] };
+my $app = sub { [200,[],[shift->{'negotiate.format'}]] };
 
 my $stack = builder {
 	enable 'Negotiate',
