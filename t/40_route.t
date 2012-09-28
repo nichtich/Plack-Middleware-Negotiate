@@ -31,6 +31,9 @@ test_psgi $app, sub {
 
     $res = $cb->(GET '/', Accept => 'text/html');
     is $res->content, 'XY', 'routed to html_app';
+
+    $res = $cb->(GET '/', Accept => 'foo/bar');
+    is $res->code, '406', 'not acceptable';
 };
 
 done_testing;

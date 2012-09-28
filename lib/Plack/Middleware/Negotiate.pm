@@ -29,6 +29,10 @@ sub prepare_app {
                 unless $self->{formats}->{$_}->{type};
         }
     }
+
+    $self->app( sub {
+        [ 406, ['Content-Type'=>'text/plain'], ['Not Acceptable']];
+    } ) unless $self->app;
 }
 
 sub call {
@@ -39,7 +43,9 @@ sub call {
     my $format = $self->negotiate($env);
     $env->{'negotiate.format'} = $format;
 
-    my $app = $self->{formats}->{$format}->{app} // $self->app;
+    my $app;
+    $app = $self->{formats}->{$format}->{app} if $format and $self->{formats}->{$format};
+    $app //= $self->app;
 
     Plack::Util::response_cb( $app->($env), sub {
         my $res = shift;
@@ -145,7 +151,7 @@ sub variants {
             },
             parameter => 'format', # e.g. http://example.org/foo?format=xml
             extension => 'strip';  # e.g. http://example.org/foo.xml
-        $app;
+        $app; # neither html nor xml requested
     };
 
 =head1 DESCRIPTION
@@ -157,6 +163,9 @@ format selection with a path extension or query parameter. The middleware takes
 care for rewriting and restoring PATH_INFO if it is configured to detect and
 strip a format extension. The PSGI response is enriched with corresponding HTTP
 headers Content-Type and Content-Language unless these headers already exist.
+
+If used as pure application, this middleware returns a HTTP status code 406 if
+no format could be negotiated.
 
 =head1 METHODS
 
