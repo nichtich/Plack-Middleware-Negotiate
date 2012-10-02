@@ -236,6 +236,8 @@ comment on whether and how this middleware should support both.
 
 =head1 SEE ALSO
 
-L<HTTP::Negotiate>, L<HTTP::Headers::ActionPack::ContentNegotiation>
+Content negotiation in this module is based on L<HTTP::Negotiate>. See 
+L<HTTP::Headers::ActionPack::ContentNegotiation> for an alternative approach.
+This module has some overlap with L<Plack::Middleware::SetAccept>.
 
 =cut
