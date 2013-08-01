@@ -124,6 +124,7 @@ sub about {
 sub variants {
     my $self = shift;
     return [ 
+        sort { $a->[0] cmp $b->[0] }
         map { 
             my $format = $self->about($_);
             [ 

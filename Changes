@@ -1,0 +1,7 @@
+# Change file for Plack::App::unAPI
+
+0.06 2013-08-01
+    Sort variants by name
+
+0.01 2012-09-05
+    Initial release at CPAN
