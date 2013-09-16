@@ -6,7 +6,7 @@ use strict;
 use v5.10.1;
 use parent 'Plack::Middleware';
 
-use Plack::Util::Accessor qw(formats parameter extension);
+use Plack::Util::Accessor qw(formats parameter extension explicit);
 use Plack::Request;
 use HTTP::Negotiate qw(choose);
 use Carp qw(croak);
@@ -28,9 +28,11 @@ sub prepare_app {
         }
     }
 
-    $self->app( sub {
-        [ 406, ['Content-Type'=>'text/plain'], ['Not Acceptable']];
-    } ) unless $self->app;
+    if (!$self->app) {
+        $self->app( sub {
+            [ 406, ['Content-Type'=>'text/plain'], ['Not Acceptable']];
+        } );
+    }
 }
 
 sub call {
@@ -42,7 +44,7 @@ sub call {
     $env->{'negotiate.format'} = $format;
 
     my $app;
-    if ( $format and $self->formats->{$format} ) {
+    if ( $format and $format ne '_' and $self->formats->{$format} ) {
         $app = $self->formats->{$format}->{app};
     }
     $app //= $self->app;
@@ -80,7 +82,7 @@ sub negotiate {
         my $param = $self->parameter;
         if ($env->{QUERY_STRING} =~ /(^|&)$param=([^&]+)/) {
             my $format = $2;
-            if ( ($format // '_') ne '_' and $self->known($format) ) {
+            if ($self->known($format)) {
                 log_trace { "format $format chosen based on query parameter" };
                 unless ( $env->{QUERY_STRING} =~ s/&$param=([^&]+)//) {
                     $env->{QUERY_STRING} =~ s/^$param=([^&]+)&?//;
@@ -90,7 +92,7 @@ sub negotiate {
         }
     }
 
-    if ($self->extension and $req->path =~ /\.([^.]+)$/ and $self->known($1)) {
+    if ($self->extension and $req->path =~ /\.([^.]+)$/ and $self->formats->{$1}) {
         my $format = $1;
         $env->{PATH_INFO} =~ s/\.$format$//
             if $self->extension eq 'strip';
@@ -98,15 +100,11 @@ sub negotiate {
         return $format;
     }
 
-    my $format = choose($self->variants, $req->headers);
-    log_trace { "format $format chosen based on HTTP content negotiation" };
-
-    return $format;
-}
-
-sub known {
-    my ($self, $name) = @_;
-    return exists $self->formats->{$name};
+    if (!$self->explicit) {
+        my $format = choose($self->variants, $req->headers);
+        log_trace { "format $format chosen based on HTTP content negotiation" };
+        return $format;
+    }
 }
 
 sub about {
@@ -124,6 +122,11 @@ sub about {
         charset  => $format->{charset} // $default->{charset},
         language => $format->{language} // $default->{language},
     };
+}
+
+sub known {
+    my ($self, $name) = @_;
+    return (defined $name and $name ne '_' and exists $self->formats->{$name});
 }
 
 sub variants {
@@ -163,17 +166,18 @@ sub variants {
             },
             parameter => 'format', # e.g. http://example.org/foo?format=xml
             extension => 'strip';  # e.g. http://example.org/foo.xml
-        $app; # neither html nor xml requested
+        $app;
     };
 
 =head1 DESCRIPTION
 
-Plack::Middleware::Negotiate applies HTTP content negotiation to a L<PSGI>
-request. The PSGI environment key C<negotiate.format> is set to the chosen
-format name. In addition to normal content negotiation one may enable explicit
-format selection with a path extension or query parameter. The middleware takes
-care for rewriting and restoring PATH_INFO if it is configured to detect and
-strip a format extension. The PSGI response is enriched with corresponding HTTP
+L<Plack::Middleware::Negotiate> applies HTTP content negotiation to a L<PSGI>
+request. In addition to normal content negotiation from a list of defined
+C<formats> one may enable explicit format selection with a path C<extension> or
+query C<parameter>. 
+
+The PSGI environment key C<negotiate.format> is set to the chosen format name
+after negotiation.  The PSGI response is enriched with corresponding HTTP
 headers Content-Type and Content-Language unless these headers already exist.
 
 If used as pure application, this middleware returns a HTTP status code 406 if
@@ -181,28 +185,9 @@ no format could be negotiated.
 
 =head1 METHODS
 
-=method new( formats => { ... } [ %argument ] )
+=method new( formats => { ... } [, %options ] )
 
 Creates a new negotiation middleware with a given set of formats.
-
-Each format can be defined with C<type>, C<quality> (defaults to 1),
-C<encoding>, C<charset>, and C<language>. The special format name C<_>
-(underscore) is reserved to define default values for all formats.
-
-Formats can also be used to directly route the request to a PSGI application:
-
-    my $app = Plack::Middleware::Negotiate->new(
-        formats => {
-            json => { 
-                type => 'application/json',
-                app  => $json_app,
-            },
-            html => {
-                type => 'text/html',
-                app  => $html_app,
-            }
-        }
-    );
 
 =method negotiate( $env )
 
@@ -211,18 +196,18 @@ explicit format selection via C<parameter> and C<extension> (if configured) and
 then passed to L<HTTP::Negotiate>. Returns the format name. May modify the PSGI
 request environment keys PATH_INFO and SCRIPT_NAME if format was selected by
 extension set to C<strip>, and strips the C<format> query parameter from
-QUERY_STRING if C<parameter> is set to a known format.
+QUERY_STRING if C<parameter> is set to a format.
+
+=method known( $format )
+  
+Tells whether a format name is known. By default this is the case if the format
+name exists in the list of formats.
 
 =method about( $format )
 
 If the format was specified, this method returns a hash with C<quality>,
 C<type>, C<encoding>, C<charset>, and C<language>. Missing values are set to
 the default.
-
-=method known( $format )
-
-Tells whether a format name is known. By default this is the case if the format
-name exists in the list of formats.
 
 =method variants
 
@@ -242,7 +227,25 @@ already given.
 
 =item formats
 
-A list of formats to choose among.
+A list of formats to choose among.  Each format can be defined with C<type>,
+C<quality> (defaults to 1), C<encoding>, C<charset>, and C<language>. The
+special format name C<_> (underscore) is reserved to define default values for
+all formats.
+
+Formats can also be used to directly route the request to a PSGI application:
+
+    my $app = Plack::Middleware::Negotiate->new(
+        formats => {
+            json => { 
+                type => 'application/json',
+                app  => $json_app,
+            },
+            html => {
+                type => 'text/html',
+                app  => $html_app,
+            }
+        }
+    );
 
 =item parameter
 
@@ -254,6 +257,13 @@ Enables explicit format selection with a query paramater, for instance
 Enables explicit format selection with a virtual file extension. The value
 'C<strip>' strips a known format name from the request path. The value
 'C<keep>' keeps the format name extension after format selection.
+
+The middleware takes
+care for rewriting and restoring PATH_INFO if it is configured to detect and
+strip a format extension. 
+=item explicit
+
+Disables content negotiation based on HTTP headers.
 
 =back
 

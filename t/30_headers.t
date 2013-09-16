@@ -6,8 +6,6 @@ use Plack::Builder;
 use Plack::Test;
 use HTTP::Request::Common;
 
-my $app = sub { [200,[],[shift->{'negotiate.format'}]] };
-
 my $stack = builder {
 	enable 'Negotiate',
 		formats => {
@@ -15,7 +13,7 @@ my $stack = builder {
 			iso => { charset => 'iso-8859-1' },
 			_ 	=> { type => 'text/html' },
 		};
-	$app;	
+    sub { [200,[],[shift->{'negotiate.format'}]] };
 };
 
 test_psgi $stack => sub {

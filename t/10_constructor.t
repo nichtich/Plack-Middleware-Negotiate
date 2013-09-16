@@ -13,4 +13,3 @@ throws_ok { builder { enable 'Negotiate', formats => { } } }
 throws_ok { builder { enable 'Negotiate', 
 		formats => { foo => { } } 
 	} } qr/requires type/, 'formats must have a type';
-

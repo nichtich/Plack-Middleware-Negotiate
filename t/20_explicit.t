@@ -12,7 +12,6 @@ my $app = sub {
         qw(negotiate.format SCRIPT_NAME PATH_INFO)]];
 };
 
-
 my $stack = builder { 
 	mount '/a', builder {
 		enable sub {
