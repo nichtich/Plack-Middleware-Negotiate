@@ -80,13 +80,9 @@ sub negotiate {
 
     if (defined $self->parameter) {
         my $param = $self->parameter;
-        if ($env->{QUERY_STRING} =~ /(^|&)$param=([^&]+)/) {
-            my $format = $2;
+        if (my $format = $req->param($param)) {
             if ($self->known($format)) {
                 log_trace { "format $format chosen based on query parameter" };
-                unless ( $env->{QUERY_STRING} =~ s/&$param=([^&]+)//) {
-                    $env->{QUERY_STRING} =~ s/^$param=([^&]+)&?//;
-                }
                 return $format;
             }
         }
