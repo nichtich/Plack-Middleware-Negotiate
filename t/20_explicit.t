@@ -44,11 +44,17 @@ test_psgi $stack => sub {
 	is $res->header('x-path'),'/foo.xml', 'restored path';
 
     $res = $cb->(GET '/a/foo.xml?format=html');
-    is $res->content, 'html|/a|/foo.xml', 'parameter';
+    is $res->content, 'html|/a|/foo.xml', 'GET parameter';
+
+    $res = $cb->(POST '/a/foo.xml?format=html', [ format => 'xml' ]);
+    is $res->content, 'html|/a|/foo.xml', 'GET parameter, ignore POST';
 
     $res = $cb->(GET '/a/foo.xml?format=baz');
     is $res->content, 'xml|/a|/foo', 'skip unknown parameter';
 	is $res->header('x-path'),'/foo.xml', 'restored path';
+
+    $res = $cb->(POST '/a/foo.xml?format=baz', [ format => 'html' ]);
+    is $res->content, 'html|/a|/foo.xml', 'POST parameter';
 
     $res = $cb->(GET '/a?format=xml');
     is $res->content, 'xml|/a|', 'parameter on empty script';

@@ -80,11 +80,19 @@ sub negotiate {
 
     if (defined $self->parameter) {
         my $param = $self->parameter;
-        if (my $format = $req->param($param)) {
-            if ($self->known($format)) {
-                log_trace { "format $format chosen based on query parameter" };
-                return $format;
-            }
+
+        my $format = $env->{QUERY_STRING} =~ /(^|&)$param=([^&]+)/ ? $2 : undef;
+
+        if (!$self->known($format)) { # no GET parameter or unknown format
+            $format = $req->body_parameters->{$param};
+        }
+
+        if ($self->known($format)) {
+            log_trace { "format $format chosen based on query parameter" };
+            unless ( $env->{QUERY_STRING} =~ s/&$param=([^&]+)//) {
+                $env->{QUERY_STRING} =~ s/^$param=([^&]+)&?//;
+            }               
+            return $format;
         }
     }
 
@@ -170,7 +178,20 @@ sub variants {
 L<Plack::Middleware::Negotiate> applies HTTP content negotiation to a L<PSGI>
 request. In addition to normal content negotiation from a list of defined
 C<formats> one may enable explicit format selection with a path C<extension> or
-query C<parameter>. 
+query C<parameter>. In summary, the following methods are tried in this order 
+to negotiate a known format:
+
+=over
+
+=item HTTP GET format parameter (if enabled with option C<parameter>)
+
+=item HTTP POST format parameter (if enabled with option C<paramater>)
+
+=item URL path extension (if enabled with option C<extension>)
+
+=item HTTP Accept Header (unless disabled with option C<explicit>)
+
+=back
 
 The PSGI environment key C<negotiate.format> is set to the chosen format name
 after negotiation.  The PSGI response is enriched with corresponding HTTP
@@ -189,11 +210,12 @@ Creates a new negotiation middleware with a given set of formats.
 
 Chooses a format based on a PSGI request. The request is first checked for
 explicit format selection via C<parameter> and C<extension> (if configured) and
-then passed to L<HTTP::Negotiate>. Returns the format name. May modify the PSGI
-request environment keys PATH_INFO and SCRIPT_NAME if format was selected by
-extension set to C<strip>, and strips the C<format> HTTP GET query parameter
-from QUERY_STRING if C<parameter> is set to a format. If format was selected by
-HTTP POST body parameter, the parameter it is not stripped from the request.
+then passed to L<HTTP::Negotiate>. On success the method returns a format name.
+The method may modify the PSGI request environment keys PATH_INFO and
+SCRIPT_NAME if format was selected by extension set to C<strip>, and strips the
+C<format> HTTP GET query parameter from QUERY_STRING if C<parameter> is set to
+a format. If format was selected by HTTP POST body parameter, the parameter it
+is not stripped from the request.
 
 =method known( $format )
   
