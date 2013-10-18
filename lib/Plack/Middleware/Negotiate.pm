@@ -191,8 +191,9 @@ Chooses a format based on a PSGI request. The request is first checked for
 explicit format selection via C<parameter> and C<extension> (if configured) and
 then passed to L<HTTP::Negotiate>. Returns the format name. May modify the PSGI
 request environment keys PATH_INFO and SCRIPT_NAME if format was selected by
-extension set to C<strip>, and strips the C<format> query parameter from
-QUERY_STRING if C<parameter> is set to a format.
+extension set to C<strip>, and strips the C<format> HTTP GET query parameter
+from QUERY_STRING if C<parameter> is set to a format. If format was selected by
+HTTP POST body parameter, the parameter it is not stripped from the request.
 
 =method known( $format )
   
@@ -246,17 +247,17 @@ Formats can also be used to directly route the request to a PSGI application:
 =item parameter
 
 Enables explicit format selection with a query paramater, for instance
-'C<format>'.
+C<format>. Both HTTP GET and HTTP POST body parameters are supported.
 
 =item extension
 
 Enables explicit format selection with a virtual file extension. The value
-'C<strip>' strips a known format name from the request path. The value
-'C<keep>' keeps the format name extension after format selection.
+C<strip> strips a known format name from the request path. The value C<keep>
+keeps the format name extension after format selection.
 
-The middleware takes
-care for rewriting and restoring PATH_INFO if it is configured to detect and
-strip a format extension. 
+The middleware takes care for rewriting and restoring PATH_INFO if it is
+configured to detect and strip a format extension. 
+
 =item explicit
 
 Disables content negotiation based on HTTP headers.
@@ -266,7 +267,7 @@ Disables content negotiation based on HTTP headers.
 =head1 LOGGING AND DEBUGGUNG
 
 Plack::Middleware::Negotiate uses C<Log::Contextual> to emit a logging message
-during content negotiation on logging level <trace>. Just set:
+during content negotiation on logging level C<trace>. Just set:
 
     $ENV{PLACK_MIDDLEWARE_NEGOTIATE_TRACE} = 1;
 
