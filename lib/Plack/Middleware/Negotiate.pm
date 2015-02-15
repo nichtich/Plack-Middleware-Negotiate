@@ -183,13 +183,17 @@ to negotiate a known format:
 
 =over
 
-=item HTTP GET format parameter (if enabled with option C<parameter>)
+=item HTTP GET/POST format parameter (if enabled with option C<parameter>)
 
-=item HTTP POST format parameter (if enabled with option C<paramater>)
+e.g. format is set to xml for http://example.org/foo?format=xml if format xml has been defined.
 
 =item URL path extension (if enabled with option C<extension>)
 
+e.g. format is set to xml for http://example.org/foo.xml if format xml has been defined.
+
 =item HTTP Accept Header (unless disabled with option C<explicit>)
+
+e.g. format is set to xml if format xml has been defined with content type application/xml for Accept header value "application/xml".
 
 =back
 
@@ -286,7 +290,7 @@ Disables content negotiation based on HTTP headers.
 
 =back
 
-=head1 LOGGING AND DEBUGGUNG
+=head1 LOGGING AND DEBUGGING
 
 Plack::Middleware::Negotiate uses C<Log::Contextual> to emit a logging message
 during content negotiation on logging level C<trace>. Just set:
