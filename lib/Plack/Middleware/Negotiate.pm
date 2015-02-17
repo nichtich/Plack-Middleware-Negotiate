@@ -1,10 +1,10 @@
 package Plack::Middleware::Negotiate;
-#ABSTRACT: Apply HTTP content negotiation as Plack middleware
-#VERSION
-
 use strict;
 use warnings;
 use v5.10.1;
+
+our $VERSION = '0.10';
+
 use parent 'Plack::Middleware';
 
 use Plack::Util::Accessor qw(formats parameter extension explicit);
@@ -158,6 +158,19 @@ sub variants {
 }
 
 1;
+__END__
+
+=head1 NAME
+
+Plack::Middleware::Negotiate - Apply HTTP content negotiation as Plack middleware
+
+=begin markdown 
+
+[![Build Status](https://travis-ci.org/nichtich/Plack-Middleware-Negotiate.png)](https://travis-ci.org/nichtich/Plack-Middleware-Negotiate)
+[![Coverage Status](https://coveralls.io/repos/nichtich/Plack-Middleware-Negotiate/badge.png)](https://coveralls.io/r/nichtich/Plack-Middleware-Negotiate)
+[![Kwalitee Score](http://cpants.cpanauthors.org/dist/Plack-Middleware-Negotiate.png)](http://cpants.cpanauthors.org/dist/Plack-Middleware-Negotiate)
+
+=end markdown
 
 =encoding utf8
 
@@ -211,11 +224,11 @@ no format could be negotiated.
 
 =head1 METHODS
 
-=method new( formats => { ... } [, %options ] )
+=head2 new( formats => { ... } [, %options ] )
 
 Creates a new negotiation middleware with a given set of formats.
 
-=method negotiate( $env )
+=head2 negotiate( $env )
 
 Chooses a format based on a PSGI request. The request is first checked for
 explicit format selection via C<parameter> and C<extension> (if configured) and
@@ -226,25 +239,25 @@ C<format> HTTP GET query parameter from QUERY_STRING if C<parameter> is set to
 a format. If format was selected by HTTP POST body parameter, the parameter it
 is not stripped from the request.
 
-=method known( $format )
+=head2 known( $format )
   
 Tells whether a format name is known. By default this is the case if the format
 name exists in the list of formats.
 
-=method about( $format )
+=head2 about( $format )
 
 If the format was specified, this method returns a hash with C<quality>,
 C<type>, C<encoding>, C<charset>, and C<language>. Missing values are set to
 the default.
 
-=method variants
+=head2 variants
 
 Returns a list of content variants to be used in L<HTTP::Negotiate>. The return
 value is an array reference of array references, each with seven elements:
 format name, source quality, type, encoding, charset, language, and size. The
 size is always zero.
 
-=method add_headers( \@headers, $format )
+=head2 add_headers( \@headers, $format )
 
 Add apropriate HTTP response headers for a format unless the headers are
 already given.
@@ -307,6 +320,17 @@ during content negotiation on logging level C<trace>. Just set:
 The Content-Encoding HTTP response header is not automatically set on a
 response and content negotiation based on size is not supported. Feel free to
 comment on whether and how this middleware should support both.
+
+=head1 CONTRIBUTORS
+
+Jakob Voß, Christopher A. Kirke
+
+=head1 COPYRIGHT AND LICENSE
+
+Copyright 2014- Jakob Voß
+
+This library is free software; you can redistribute it and/or modify it under
+the same terms as Perl itself.
 
 =head1 SEE ALSO
 
