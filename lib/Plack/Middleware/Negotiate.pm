@@ -3,6 +3,7 @@ package Plack::Middleware::Negotiate;
 #VERSION
 
 use strict;
+use warnings;
 use v5.10.1;
 use parent 'Plack::Middleware';
 
