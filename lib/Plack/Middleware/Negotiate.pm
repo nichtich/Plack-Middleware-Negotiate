@@ -58,21 +58,25 @@ sub call {
     });
 }
 
-sub add_headers { # TODO: use Plack::Util or P:M:Headers
+sub add_headers {
     my ($self, $headers, $name) = @_;
 
     my $format = $self->about($name) || return;
-    my $fields = { @$headers };
 
-    if (!$fields->{'Content-Type'}) {
+    if (!Plack::Util::header_exists($headers,'Content-Type')) {
         my $type = $format->{type};
         $type .= "; charset=". $format->{charset}
             if $format->{charset};
-        push @$headers, 'Content-Type' => $type;
+        Plack::Util::header_set($headers,'Content-Type',$type);
     }
 
-    push @$headers, 'Content-Language' => $format->{language}
-        if $format->{language} and !$fields->{'Content-Language'};
+    if (!Plack::Util::header_exists($headers,'Content-Language')) {
+        Plack::Util::header_set($headers,'Content-Language',$format->{language})
+            if $format->{language};
+    }
+    
+    Plack::Util::header_push($headers,'Vary','Accept');
+
 }
 
 sub negotiate {
