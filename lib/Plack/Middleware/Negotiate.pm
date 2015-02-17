@@ -45,7 +45,7 @@ sub call {
     $env->{'negotiate.format'} = $format;
 
     my $app;
-    if ( $format and $format ne '_' and $self->formats->{$format} ) {
+    if ( $format and $format ne '_' and $self->known($format) ) {
         $app = $self->formats->{$format}->{app};
     }
     $app //= $self->app;
@@ -97,7 +97,7 @@ sub negotiate {
         }
     }
 
-    if ($self->extension and $req->path =~ /\.([^.]+)$/ and $self->formats->{$1}) {
+    if ($self->extension and $req->path =~ /\.([^.]+)$/ and $self->known($1)) {
         my $format = $1;
         $env->{PATH_INFO} =~ s/\.$format$//
             if $self->extension eq 'strip';
