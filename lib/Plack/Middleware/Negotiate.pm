@@ -79,9 +79,13 @@ sub add_headers {
 
 }
 
+
+sub _new_plack_request { Plack::Request->new($_[1]) }
+
+
 sub negotiate {
     my ($self, $env) = @_;
-    my $req = Plack::Request->new($env);
+    my $req = $self->_new_plack_request($env);
 
     if (defined $self->parameter) {
         my $param = $self->parameter;
